@@ -1,0 +1,48 @@
+name: LifeDrop CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Checkout repository
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      # 2. Setup SSH key
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.EC2_SSH_KEY }}" > key.pem
+          chmod 600 key.pem
+          ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
+
+      # 3. Deploy to EC2
+      - name: Deploy to EC2 Server
+        run: |
+          ssh -i key.pem ubuntu@${{ secrets.EC2_HOST }} << 'EOF'
+
+          echo "🚀 Starting LifeDrop Deployment..."
+
+          # Go to project directory
+          cd /opt/lifedrop
+
+          # Pull latest code (optional if using git repo on EC2)
+          git pull origin main
+
+          # Inject JWT secret from GitHub Secrets
+          export JWT_SECRET=${{ secrets.JWT_SECRET }}
+
+          # Stop existing containers
+          docker compose down
+
+          # Build and start containers
+          docker compose up -d --build
+
+          echo "✅ Deployment Successful!"
+          EOF
